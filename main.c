@@ -1,13 +1,16 @@
 /**
- * 学生成绩管理系统
- * 
+ * 学生成绩管理系统（单链表版本）
+ *
+ * 数据结构：带头结点的单链表。链表是数据结构课程的核心内容，
+ *           本实现覆盖链表的创建、遍历、查找、插入、删除、排序等基本操作。
+ *
  * 功能：学生信息的录入、显示、查询、修改、删除、排序、统计，
  *       并支持数据保存到文件与从文件加载。
- * 
+ *
  * 编译运行（需要 GCC）：
  *   gcc main.c -o student_management.exe
  *   ./student_management.exe
- * 
+ *
  * 数据文件：默认保存在程序同目录下的 students.txt
  */
 
@@ -15,25 +18,26 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_STUDENTS 100   /* 最大学生数量 */
 #define NAME_LEN 20        /* 姓名最大长度 */
 #define FILENAME "students.txt"
 
-/* 学生结构体：一条学生记录包含学号、姓名、两科成绩与平均分 */
-typedef struct {
-    char id[12];       /* 学号 */
-    char name[NAME_LEN]; /* 姓名 */
-    int c_score;       /* C语言成绩（0-100） */
-    int ds_score;      /* 数据结构成绩（0-100） */
-    float average;     /* 平均分，自动计算 */
+/* 学生结点：数据域 + 指针域 */
+typedef struct Student {
+    char id[12];            /* 学号 */
+    char name[NAME_LEN];    /* 姓名 */
+    int c_score;            /* C语言成绩（0-100） */
+    int ds_score;           /* 数据结构成绩（0-100） */
+    float average;          /* 平均分，自动计算 */
+    struct Student *next;   /* 指向下一个结点的指针 */
 } Student;
 
-/* 全局学生数组与当前人数 */
-Student students[MAX_STUDENTS];
-int count = 0;
+/* 头结点：不存放学生数据，只作为链表入口，简化插入/删除的边界处理 */
+Student *head = NULL;
 
 /* 函数声明 */
 void menu(void);
+Student *create_list(void);
+Student *create_node(void);
 void add_student(void);
 void show_all(void);
 void search_by_id(void);
@@ -46,17 +50,20 @@ void save_to_file(void);
 void load_from_file(void);
 int  input_score(const char *prompt);
 void calc_average(Student *s);
-int  find_index_by_id(const char *id);
+Student *find_node_by_id(const char *id);
+void free_list(void);
 
 int main(void)
 {
-    load_from_file();
+    head = create_list();          /* 创建带头结点的链表 */
+    load_from_file();              /* 启动时加载历史数据 */
+
     int choice;
     do {
         menu();
         printf("请输入您的选择（0-9）：");
         scanf("%d", &choice);
-        while (getchar() != '\n');   /* 清空输入缓冲，防止残留换行影响后续输入 */
+        while (getchar() != '\n'); /* 清空输入缓冲 */
         switch (choice) {
             case 1: add_student();      break;
             case 2: show_all();         break;
@@ -72,13 +79,15 @@ int main(void)
         }
         printf("\n");
     } while (choice != 0);
+
+    free_list();                   /* 退出前释放所有结点，避免内存泄漏 */
     return 0;
 }
 
 /* 打印主菜单 */
 void menu(void)
 {
-    printf("=========== 学生成绩管理系统 ===========\n");
+    printf("=========== 学生成绩管理系统（单链表版）===========\n");
     printf("  1. 录入学生信息\n");
     printf("  2. 显示所有学生\n");
     printf("  3. 按学号查询\n");
@@ -89,53 +98,79 @@ void menu(void)
     printf("  8. 成绩统计\n");
     printf("  9. 保存数据到文件\n");
     printf("  0. 退出系统（自动保存）\n");
-    printf("=========================================\n");
+    printf("===============================================\n");
 }
 
-/* 录入一个学生 */
+/* 创建带头结点的空链表 */
+Student *create_list(void)
+{
+    Student *h = (Student *)malloc(sizeof(Student));
+    if (h == NULL) {
+        printf("内存分配失败，程序退出。\n");
+        exit(1);
+    }
+    h->next = NULL;
+    return h;
+}
+
+/* 创建单个学生结点（数据域由调用方填充） */
+Student *create_node(void)
+{
+    Student *s = (Student *)malloc(sizeof(Student));
+    if (s == NULL) {
+        printf("内存分配失败。\n");
+        exit(1);
+    }
+    s->next = NULL;
+    return s;
+}
+
+/* 录入一个学生（尾插法：新结点追加到链表末尾） */
 void add_student(void)
 {
-    if (count >= MAX_STUDENTS) {
-        printf("存储空间已满，无法继续录入。\n");
-        return;
-    }
-    Student s;
+    Student *s = create_node();
     printf("请输入学号：");
-    scanf("%11s", s.id);
+    scanf("%11s", s->id);
     while (getchar() != '\n');
 
     /* 学号查重，避免重复录入 */
-    if (find_index_by_id(s.id) >= 0) {
+    if (find_node_by_id(s->id) != NULL) {
         printf("该学号已存在，录入失败。\n");
+        free(s);
         return;
     }
 
     printf("请输入姓名：");
-    scanf("%19s", s.name);
+    scanf("%19s", s->name);
     while (getchar() != '\n');
 
-    s.c_score  = input_score("C语言成绩（0-100）");
-    s.ds_score = input_score("数据结构成绩（0-100）");
-    calc_average(&s);
+    s->c_score  = input_score("C语言成绩（0-100）");
+    s->ds_score = input_score("数据结构成绩（0-100）");
+    calc_average(s);
 
-    students[count++] = s;
-    printf("录入成功！当前共 %d 名学生。\n", count);
+    /* 尾插：遍历到最后一个结点后挂接 */
+    Student *p = head;
+    while (p->next != NULL)
+        p = p->next;
+    p->next = s;
+
+    printf("录入成功！\n");
 }
 
-/* 显示所有学生 */
+/* 显示所有学生：遍历链表 */
 void show_all(void)
 {
-    if (count == 0) {
+    if (head->next == NULL) {
         printf("暂无学生数据。\n");
         return;
     }
     printf("%-12s %-10s %-12s %-14s %-8s\n", "学号", "姓名", "C语言", "数据结构", "平均分");
     printf("--------------------------------------------------------------\n");
-    for (int i = 0; i < count; i++) {
+    Student *p = head->next;
+    while (p != NULL) {
         printf("%-12s %-10s %-12d %-14d %-8.2f\n",
-               students[i].id, students[i].name,
-               students[i].c_score, students[i].ds_score,
-               students[i].average);
+               p->id, p->name, p->c_score, p->ds_score, p->average);
+        p = p->next;
     }
 }
 
@@ -147,17 +182,15 @@ void search_by_id(void)
     scanf("%11s", id);
     while (getchar() != '\n');
 
-    int idx = find_index_by_id(id);
-    if (idx < 0) {
+    Student *p = find_node_by_id(id);
+    if (p == NULL) {
         printf("未找到学号为 %s 的学生。\n", id);
         return;
     }
     printf("%-12s %-10s %-12s %-14s %-8s\n", "学号", "姓名", "C语言", "数据结构", "平均分");
     printf("--------------------------------------------------------------\n");
     printf("%-12s %-10s %-12d %-14d %-8.2f\n",
-           students[idx].id, students[idx].name,
-           students[idx].c_score, students[idx].ds_score,
-           students[idx].average);
+           p->id, p->name, p->c_score, p->ds_score, p->average);
 }
 
 /* 按姓名模糊查询（支持关键字） */
@@ -171,14 +204,14 @@ void search_by_name(void)
     int found = 0;
     printf("%-12s %-10s %-12s %-14s %-8s\n", "学号", "姓名", "C语言", "数据结构", "平均分");
     printf("--------------------------------------------------------------\n");
-    for (int i = 0; i < count; i++) {
-        if (strstr(students[i].name, name) != NULL) {
+    Student *p = head->next;
+    while (p != NULL) {
+        if (strstr(p->name, name) != NULL) {
             printf("%-12s %-10s %-12d %-14d %-8.2f\n",
-                   students[i].id, students[i].name,
-                   students[i].c_score, students[i].ds_score,
-                   students[i].average);
+                   p->id, p->name, p->c_score, p->ds_score, p->average);
             found = 1;
         }
+        p = p->next;
     }
     if (!found)
         printf("未找到姓名包含 %s 的学生。\n", name);
@@ -192,26 +225,25 @@ void modify_student(void)
     scanf("%11s", id);
     while (getchar() != '\n');
 
-    int idx = find_index_by_id(id);
-    if (idx < 0) {
+    Student *p = find_node_by_id(id);
+    if (p == NULL) {
         printf("未找到学号为 %s 的学生。\n", id);
         return;
     }
 
     printf("当前信息：学号 %s，姓名 %s，C语言 %d，数据结构 %d\n",
-           students[idx].id, students[idx].name,
-           students[idx].c_score, students[idx].ds_score);
+           p->id, p->name, p->c_score, p->ds_score);
 
     printf("请输入新的姓名：");
-    scanf("%19s", students[idx].name);
+    scanf("%19s", p->name);
     while (getchar() != '\n');
-    students[idx].c_score  = input_score("请输入新的C语言成绩（0-100）");
-    students[idx].ds_score = input_score("请输入新的数据结构成绩（0-100）");
-    calc_average(&students[idx]);
+    p->c_score  = input_score("请输入新的C语言成绩（0-100）");
+    p->ds_score = input_score("请输入新的数据结构成绩（0-100）");
+    calc_average(p);
     printf("修改成功。\n");
 }
 
-/* 删除指定学号的学生 */
+/* 删除指定学号的学生：找到前驱结点后修改指针，跳过并释放目标结点 */
 void delete_student(void)
 {
     char id[12];
@@ -219,35 +251,58 @@ void delete_student(void)
     scanf("%11s", id);
     while (getchar() != '\n');
 
-    int idx = find_index_by_id(id);
-    if (idx < 0) {
+    Student *prev = head;          /* 前驱指针，从头结点开始 */
+    Student *cur  = head->next;    /* 当前指针 */
+    while (cur != NULL && strcmp(cur->id, id) != 0) {
+        prev = cur;
+        cur  = cur->next;
+    }
+    if (cur == NULL) {
         printf("未找到学号为 %s 的学生。\n", id);
         return;
     }
 
-    /* 后面的元素整体前移覆盖，实现删除 */
-    for (int i = idx; i < count - 1; i++)
-        students[i] = students[i + 1];
-    count--;
-    printf("已删除学号为 %s 的学生，当前共 %d 名学生。\n", id, count);
+    prev->next = cur->next;        /* 跳过待删结点 */
+    free(cur);                     /* 释放结点内存 */
+    printf("已删除学号为 %s 的学生。\n", id);
 }
 
-/* 按平均分从高到低排序（冒泡排序，考研数据结构经典算法） */
+/* 按平均分从高到低排序（链表冒泡排序，交换相邻结点的数据域） */
 void sort_by_average(void)
 {
-    if (count < 2) {
+    if (head->next == NULL || head->next->next == NULL) {
         printf("学生人数不足，无需排序。\n");
         return;
     }
-    for (int i = 0; i < count - 1; i++) {
-        for (int j = 0; j < count - 1 - i; j++) {
-            if (students[j].average < students[j + 1].average) {
-                Student tmp = students[j];
-                students[j] = students[j + 1];
-                students[j + 1] = tmp;
+    int swapped;
+    do {
+        swapped = 0;
+        Student *p = head->next;   /* p 指向当前比较对的前一个 */
+        while (p->next != NULL) {
+            if (p->average < p->next->average) {
+                /* 交换两个结点的数据域（学号、姓名、成绩、平均分） */
+                char tmp_id[12], tmp_name[NAME_LEN];
+                int tmp_c, tmp_ds;
+                float tmp_avg;
+
+                strcpy(tmp_id, p->id);
+                strcpy(tmp_name, p->name);
+                tmp_c  = p->c_score;  tmp_ds = p->ds_score;  tmp_avg = p->average;
+
+                strcpy(p->id, p->next->id);    strcpy(p->name, p->next->name);
+                p->c_score = p->next->c_score; p->ds_score = p->next->ds_score;
+                p->average = p->next->average;
+
+                strcpy(p->next->id, tmp_id);   strcpy(p->next->name, tmp_name);
+                p->next->c_score = tmp_c;      p->next->ds_score = tmp_ds;
+                p->next->average = tmp_avg;
+
+                swapped = 1;
             }
+            p = p->next;
         }
-    }
+    } while (swapped);
+
     printf("排序完成，已按平均分从高到低排列，当前结果：\n");
     show_all();
 }
@@ -255,22 +310,26 @@ void sort_by_average(void)
 /* 成绩统计：各科平均分、最高分、最低分、及格率 */
 void statistics(void)
 {
-    if (count == 0) {
+    if (head->next == NULL) {
         printf("暂无数据，无法统计。\n");
         return;
     }
+    int count = 0;
     int sum_c = 0, sum_ds = 0, max_c = 0, max_ds = 0, min_c = 100, min_ds = 100;
     int pass_c = 0, pass_ds = 0;   /* 及格线 60 分 */
 
-    for (int i = 0; i < count; i++) {
-        sum_c  += students[i].c_score;
-        sum_ds += students[i].ds_score;
-        if (students[i].c_score > max_c)  max_c  = students[i].c_score;
-        if (students[i].ds_score > max_ds) max_ds = students[i].ds_score;
-        if (students[i].c_score < min_c)  min_c  = students[i].c_score;
-        if (students[i].ds_score < min_ds) min_ds = students[i].ds_score;
-        if (students[i].c_score >= 60)  pass_c++;
-        if (students[i].ds_score >= 60) pass_ds++;
+    Student *p = head->next;
+    while (p != NULL) {
+        count++;
+        sum_c  += p->c_score;
+        sum_ds += p->ds_score;
+        if (p->c_score > max_c)  max_c  = p->c_score;
+        if (p->ds_score > max_ds) max_ds = p->ds_score;
+        if (p->c_score < min_c)  min_c  = p->c_score;
+        if (p->ds_score < min_ds) min_ds = p->ds_score;
+        if (p->c_score >= 60)  pass_c++;
+        if (p->ds_score >= 60) pass_ds++;
+        p = p->next;
     }
 
     printf("========== 成绩统计（共 %d 人）==========\n", count);
@@ -281,7 +340,7 @@ void statistics(void)
            (float)sum_ds / count, max_ds, min_ds, (float)pass_ds / count * 100);
 }
 
-/* 保存学生数据到文本文件（UTF-8 编码，便于阅读） */
+/* 保存学生数据到文本文件（遍历链表逐结点写入） */
 void save_to_file(void)
 {
     FILE *fp = fopen(FILENAME, "w");
@@ -289,39 +348,51 @@ void save_to_file(void)
         printf("文件打开失败，保存未成功。\n");
         return;
     }
+    int count = 0;
+    Student *p = head->next;
+    while (p != NULL) {
+        count++;
+        p = p->next;
+    }
     fprintf(fp, "%d\n", count);
-    for (int i = 0; i < count; i++) {
+
+    p = head->next;
+    while (p != NULL) {
         fprintf(fp, "%s %s %d %d %.2f\n",
-                students[i].id, students[i].name,
-                students[i].c_score, students[i].ds_score,
-                students[i].average);
+                p->id, p->name, p->c_score, p->ds_score, p->average);
+        p = p->next;
     }
     fclose(fp);
     printf("数据已保存到 %s。\n", FILENAME);
 }
 
-/* 程序启动时从文件加载数据 */
+/* 程序启动时从文件加载数据（读取后用尾插法重建链表） */
 void load_from_file(void)
 {
     FILE *fp = fopen(FILENAME, "r");
     if (fp == NULL)
         return;   /* 文件不存在视为首次运行 */
-    if (fscanf(fp, "%d", &count) != 1) {
-        count = 0;
+
+    int n = 0;
+    if (fscanf(fp, "%d", &n) != 1) {
         fclose(fp);
         return;
     }
-    for (int i = 0; i < count; i++) {
+    for (int i = 0; i < n; i++) {
+        Student *s = create_node();
         if (fscanf(fp, "%11s %19s %d %d %f",
-                   students[i].id, students[i].name,
-                   &students[i].c_score, &students[i].ds_score,
-                   &students[i].average) != 5) {
-            count = i;   /* 文件异常时只保留完整读取的部分 */
+                   s->id, s->name, &s->c_score, &s->ds_score, &s->average) != 5) {
+            free(s);
             break;
         }
+        /* 尾插 */
+        Student *tail = head;
+        while (tail->next != NULL)
+            tail = tail->next;
+        tail->next = s;
     }
     fclose(fp);
-    printf("已从 %s 加载 %d 条学生数据。\n", FILENAME, count);
+    printf("已从 %s 加载 %d 条学生数据。\n", FILENAME, n);
 }
 
 /* 带范围校验的成绩输入 */
@@ -338,18 +409,31 @@ int input_score(const char *prompt)
     return score;
 }
 
-/* 计算平均分并写入结构体 */
+/* 计算平均分并写入结点 */
 void calc_average(Student *s)
 {
     s->average = (s->c_score + s->ds_score) / 2.0f;
 }
 
-/* 按学号查找，返回数组下标；未找到返回 -1 */
-int find_index_by_id(const char *id)
+/* 按学号查找，返回结点指针；未找到返回 NULL */
+Student *find_node_by_id(const char *id)
 {
-    for (int i = 0; i < count; i++) {
-        if (strcmp(students[i].id, id) == 0)
-            return i;
+    Student *p = head->next;
+    while (p != NULL) {
+        if (strcmp(p->id, id) == 0)
+            return p;
+        p = p->next;
     }
-    return -1;
+    return NULL;
+}
+
+/* 释放整个链表的内存，防止内存泄漏 */
+void free_list(void)
+{
+    Student *p = head;
+    while (p != NULL) {
+        Student *tmp = p;
+        p = p->next;
+        free(tmp);
+    }
 }
