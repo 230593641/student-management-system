@@ -52,6 +52,7 @@ int  input_score(const char *prompt);
 void calc_average(Student *s);
 Student *find_node_by_id(const char *id);
 void free_list(void);
+int  is_all_digits(const char *s);
 
 int main(void)
 {
@@ -62,8 +63,12 @@ int main(void)
     do {
         menu();
         printf("请输入您的选择（0-9）：");
-        scanf("%d", &choice);
-        while (getchar() != '\n'); /* 清空输入缓冲 */
+        if (scanf("%d", &choice) != 1) {
+            while (getchar() != '\n'); /* 清空非法输入 */
+            choice = -1;               /* 无效选择，走 default 分支 */
+        } else {
+            while (getchar() != '\n'); /* 清空输入缓冲 */
+        }
         switch (choice) {
             case 1: add_student();      break;
             case 2: show_all();         break;
@@ -125,6 +130,18 @@ Student *create_node(void)
     return s;
 }
 
+/* 判断字符串是否全部为数字（学号合法性校验） */
+int is_all_digits(const char *s)
+{
+    if (s[0] == '\0')
+        return 0;
+    for (int i = 0; s[i] != '\0'; i++) {
+        if (s[i] < '0' || s[i] > '9')
+            return 0;
+    }
+    return 1;
+}
+
 /* 录入一个学生（尾插法：新结点追加到链表末尾） */
 void add_student(void)
 {
@@ -132,6 +149,13 @@ void add_student(void)
     printf("请输入学号：");
     scanf("%11s", s->id);
     while (getchar() != '\n');
+
+    /* 学号格式校验：必须为纯数字 */
+    if (!is_all_digits(s->id)) {
+        printf("学号只能由数字组成，录入失败。\n");
+        free(s);
+        return;
+    }
 
     /* 学号查重，避免重复录入 */
     if (find_node_by_id(s->id) != NULL) {
@@ -262,6 +286,16 @@ void delete_student(void)
         return;
     }
 
+    /* 删除前确认，防止误操作 */
+    char confirm;
+    printf("确认删除学号为 %s 的学生（%s）吗？(y/n)：", cur->id, cur->name);
+    scanf("%c", &confirm);
+    while (getchar() != '\n');
+    if (confirm != 'y' && confirm != 'Y') {
+        printf("已取消删除。\n");
+        return;
+    }
+
     prev->next = cur->next;        /* 跳过待删结点 */
     free(cur);                     /* 释放结点内存 */
     printf("已删除学号为 %s 的学生。\n", id);
@@ -307,7 +341,7 @@ void sort_by_average(void)
     show_all();
 }
 
-/* 成绩统计：各科平均分、最高分、最低分、及格率 */
+/* 成绩统计：各科平均分、最高分、最低分、及格率、分数段分布 */
 void statistics(void)
 {
     if (head->next == NULL) {
@@ -317,6 +351,8 @@ void statistics(void)
     int count = 0;
     int sum_c = 0, sum_ds = 0, max_c = 0, max_ds = 0, min_c = 100, min_ds = 100;
     int pass_c = 0, pass_ds = 0;   /* 及格线 60 分 */
+    /* 分数段：优>=90，良80-89，中70-79，及格60-69，不及格<60 */
+    int seg_c[5] = {0}, seg_ds[5] = {0};
 
     Student *p = head->next;
     while (p != NULL) {
@@ -329,6 +365,19 @@ void statistics(void)
         if (p->ds_score < min_ds) min_ds = p->ds_score;
         if (p->c_score >= 60)  pass_c++;
         if (p->ds_score >= 60) pass_ds++;
+
+        if (p->c_score >= 90)       seg_c[0]++;
+        else if (p->c_score >= 80)  seg_c[1]++;
+        else if (p->c_score >= 70)  seg_c[2]++;
+        else if (p->c_score >= 60)  seg_c[3]++;
+        else                        seg_c[4]++;
+
+        if (p->ds_score >= 90)      seg_ds[0]++;
+        else if (p->ds_score >= 80) seg_ds[1]++;
+        else if (p->ds_score >= 70) seg_ds[2]++;
+        else if (p->ds_score >= 60) seg_ds[3]++;
+        else                        seg_ds[4]++;
+
         p = p->next;
     }
 
@@ -338,6 +387,13 @@ void statistics(void)
            (float)sum_c / count, max_c, min_c, (float)pass_c / count * 100);
     printf("数据结构  %6.2f   %6d   %6d   %6.1f%%\n",
            (float)sum_ds / count, max_ds, min_ds, (float)pass_ds / count * 100);
+    printf("---------------------------------------------\n");
+    printf("分数段分布：\n");
+    printf("科目      优(>=90)  良(80-89)  中(70-79)  及格(60-69)  不及格(<60)\n");
+    printf("C语言     %5d     %5d     %5d     %5d      %5d\n",
+           seg_c[0], seg_c[1], seg_c[2], seg_c[3], seg_c[4]);
+    printf("数据结构  %5d     %5d     %5d     %5d      %5d\n",
+           seg_ds[0], seg_ds[1], seg_ds[2], seg_ds[3], seg_ds[4]);
 }
 
 /* 保存学生数据到文本文件（遍历链表逐结点写入） */
@@ -395,13 +451,17 @@ void load_from_file(void)
     printf("已从 %s 加载 %d 条学生数据。\n", FILENAME, n);
 }
 
-/* 带范围校验的成绩输入 */
+/* 带范围校验的成绩输入（含非法字符处理，防止死循环） */
 int input_score(const char *prompt)
 {
     int score;
     do {
         printf("请输入%s：", prompt);
-        scanf("%d", &score);
+        if (scanf("%d", &score) != 1) {
+            while (getchar() != '\n'); /* 清掉非法输入 */
+            printf("输入无效，成绩必须是 0-100 的整数，请重新输入。\n");
+            continue;
+        }
         while (getchar() != '\n');
         if (score < 0 || score > 100)
             printf("成绩必须在 0-100 之间，请重新输入。\n");

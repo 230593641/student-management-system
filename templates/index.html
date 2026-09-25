@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学生成绩管理系统</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <h1>🎓 学生成绩管理系统</h1>
+      <p class="subtitle">Flask + MySQL · 数据库驱动 · 前端交互</p>
+    </header>
+
+    <!-- 统计卡片 -->
+    <section id="stats" class="stats">
+      <div class="card stat-total">
+        <div class="stat-label">学生总数</div>
+        <div class="stat-value" id="stTotal">-</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">C语言 平均</div>
+        <div class="stat-value" id="stCAvg">-</div>
+        <div class="stat-sub" id="stCMinMax">-</div>
+        <div class="stat-sub" id="stCPass">-</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">数据结构 平均</div>
+        <div class="stat-value" id="stDsAvg">-</div>
+        <div class="stat-sub" id="stDsMinMax">-</div>
+        <div class="stat-sub" id="stDsPass">-</div>
+      </div>
+    </section>
+
+    <!-- 分数段分布 -->
+    <section id="segments" class="segments">
+      <h2>成绩分数段分布</h2>
+      <table class="seg-table">
+        <thead>
+          <tr><th>科目</th><th>优 (≥90)</th><th>良 (80-89)</th><th>中 (70-79)</th><th>及格 (60-69)</th><th>不及格 (&lt;60)</th></tr>
+        </thead>
+        <tbody id="segBody"></tbody>
+      </table>
+    </section>
+
+    <!-- 操作区 -->
+    <section class="ops">
+      <!-- 新增表单 -->
+      <div class="panel">
+        <h2>新增学生</h2>
+        <form id="addForm" class="form-row">
+          <input name="id" placeholder="学号" maxlength="11" required>
+          <input name="name" placeholder="姓名" maxlength="19" required>
+          <input name="c_score" type="number" min="0" max="100" placeholder="C语言成绩" required>
+          <input name="ds_score" type="number" min="0" max="100" placeholder="数据结构成绩" required>
+          <button type="submit" class="btn primary">录入</button>
+        </form>
+      </div>
+
+      <!-- 查询 -->
+      <div class="panel">
+        <h2>查询学生</h2>
+        <div class="form-row">
+          <select id="searchType">
+            <option value="id">按学号</option>
+            <option value="name">按姓名(模糊)</option>
+          </select>
+          <input id="searchInput" placeholder="输入关键字" maxlength="19">
+          <button id="searchBtn" class="btn">查询</button>
+          <button id="resetBtn" class="btn ghost">显示全部</button>
+        </div>
+      </div>
+
+      <!-- 排序 -->
+      <div class="panel">
+        <h2>排序</h2>
+        <div class="form-row">
+          <select id="sortField">
+            <option value="average" selected>按平均分</option>
+            <option value="c_score">按C语言成绩</option>
+            <option value="ds_score">按数据结构成绩</option>
+            <option value="id">按学号</option>
+          </select>
+          <select id="sortOrder">
+            <option value="desc" selected>降序</option>
+            <option value="asc">升序</option>
+          </select>
+          <button id="sortBtn" class="btn">排序</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 学生列表 -->
+    <section class="list">
+      <h2>学生列表 <span id="listTotal" class="badge"></span></h2>
+      <div class="table-wrap">
+        <table id="studentTable">
+          <thead>
+            <tr><th>学号</th><th>姓名</th><th>C语言</th><th>数据结构</th><th>平均分</th><th>操作</th></tr>
+          </thead>
+          <tbody id="studentBody"></tbody>
+        </table>
+      </div>
+      <p id="emptyTip" class="empty hidden">暂无数据，请先录入学生。</p>
+    </section>
+  </div>
+
+  <!-- 编辑弹窗 -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>编辑学生 <span id="editId"></span></h2>
+      <form id="editForm" class="form-col">
+        <label>姓名 <input name="name" maxlength="19" required></label>
+        <label>C语言成绩 <input name="c_score" type="number" min="0" max="100" required></label>
+        <label>数据结构成绩 <input name="ds_score" type="number" min="0" max="100" required></label>
+        <div class="modal-actions">
+          <button type="button" id="editCancel" class="btn ghost">取消</button>
+          <button type="submit" class="btn primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

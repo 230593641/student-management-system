@@ -1,7 +1,17 @@
-# 编译产物
+# 编译产物（C 语言版）
 *.exe
 *.o
 *.obj
 
 # 运行产生的数据文件
 students.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 编辑器
+.vscode/
